@@ -10,25 +10,26 @@ st.title("Dashboard de Análise de Hosts do Zabbix")
 # --- Sidebar para Controles ---
 st.sidebar.header("Controles")
 if st.sidebar.button("Limpar Cache e Atualizar Dados"):
-    # Limpa o cache da função para forçar a re-execução
     run_update_pipeline.clear()
+    # Limpa o estado dos filtros ao atualizar os dados
+    if 'selected_category' in st.session_state:
+        del st.session_state['selected_category']
+    if 'selected_bairro' in st.session_state:
+        del st.session_state['selected_bairro']
     st.success("Cache limpo. Os dados serão atualizados.")
-    # Opcional: recarrega a página para refletir a mudança imediatamente
     st.rerun()
 
 # --- Carregamento dos Dados ---
-# A função agora é cacheada. O spinner é gerenciado pelo decorador @st.cache_data.
 df = run_update_pipeline()
 
-# Timestamp da última atualização
-if 'last_update' not in st.session_state:
-    st.session_state.last_update = time.time()
-
-st.sidebar.info(f"Dados carregados em: {time.strftime('%H:%M:%S', time.localtime(st.session_state.last_update))}")
-
+# --- Inicialização do Estado da Sessão para Filtros ---
+if 'selected_category' not in st.session_state:
+    st.session_state.selected_category = []
+if 'selected_bairro' not in st.session_state:
+    st.session_state.selected_bairro = []
 
 if df is not None and not df.empty:
-    # NOVO: Cards de estatísticas
+    # ... (código dos cards de estatísticas permanece o mesmo) ...
     st.header("Status da Rede")
     
     # Definir o status UP baseado em ping_status e memory_usage_percent
@@ -49,37 +50,36 @@ if df is not None and not df.empty:
         col1.metric("Total de Hosts", f"{total_hosts}")
         col2.metric("Hosts UP", f"{up_hosts}", f"{pct_up:.1f}%")
         col3.metric("Hosts DOWN", f"{down_hosts}")
-        
-        # Adicionar tempo médio de resposta se disponível
-        if 'ping_latency_sec' in df.columns:
-            avg_latency = df['ping_latency_sec'].mean()
-            col4.metric("Latência Média", f"{avg_latency:.3f} seg")
     else:
         st.warning("Dados de monitoramento não disponíveis. Verifique a conexão com a API do Zabbix.")
-    
-    # Filtros
+
+    # --- Filtros com Gerenciamento de Estado ---
     st.header("Filtros")
     col1, col2 = st.columns(2)
     
     # Filtro por Categoria
-    selected_category = col1.multiselect(
+    col1.multiselect(
         "Filtrar por Categoria:",
         options=df['category'].unique(),
+        key='selected_category' # Usa a chave para conectar ao session_state
     )
     
     # Filtro por Bairro
-    selected_bairro = col2.multiselect(
+    col2.multiselect(
         "Filtrar por Bairro:",
         options=df['bairro'].sort_values().unique(),
+        key='selected_bairro' # Usa a chave para conectar ao session_state
     )
     
-    # Aplicação dos filtros (verifica se há seleção antes de filtrar)
+    # Aplicação dos filtros lendo do session_state
     filtered_df = df.copy()
-    if selected_category:
-        filtered_df = filtered_df[filtered_df['category'].isin(selected_category)]
-    if selected_bairro:
-        filtered_df = filtered_df[filtered_df['bairro'].isin(selected_bairro)]
+    if st.session_state.selected_category:
+        filtered_df = filtered_df[filtered_df['category'].isin(st.session_state.selected_category)]
+    if st.session_state.selected_bairro:
+        filtered_df = filtered_df[filtered_df['bairro'].isin(st.session_state.selected_bairro)]
     
+    # ... (o resto do seu código para exibir métricas e o mapa continua o mesmo) ...
+    # NOVO: Visualização detalhada dos dados do Zabbix
     # NOVO: Visualização detalhada dos dados do Zabbix
     st.header("Métricas de Monitoramento")
     
