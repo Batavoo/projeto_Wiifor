@@ -19,7 +19,7 @@ ENV/
 
 # Arquivos de dados gerados e cache
 # *.xlsx
-*.csv
+# *.csv
 *.log
 
 # Configurações de IDE
