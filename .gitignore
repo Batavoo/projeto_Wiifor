@@ -1,0 +1,27 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+
+# Streamlit
+# IMPORTANTE: Nunca envie seu arquivo de segredos para o repositório!
+.streamlit/secrets.toml
+
+# Arquivos de dados gerados e cache
+*.xlsx
+*.csv
+*.log
+
+# Configurações de IDE
+.vscode/
+.idea/
