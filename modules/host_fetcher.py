@@ -42,27 +42,23 @@ def fetch_and_treat_hosts():
     hosts_df['treated_name'] = hosts_df['name'].apply(name_parser.standardize_address_name)
     return hosts_df
 
-def run_update_pipeline(force_zabbix_refresh=True):
+# REMOVA o decorador @st.cache_data daqui. O cache será gerenciado no app.py.
+@st.cache_data(show_spinner="Processando dados (Zabbix, Geocoding, etc)...")
+def run_update_pipeline():
     """
     Executa a pipeline de atualização de dados.
-    - Sempre busca dados novos do Zabbix (por padrão)
-    - Usa o cache apenas para geocodificação
-    
-    Args:
-        force_zabbix_refresh (bool): Se True, busca novos dados do Zabbix.
+    - O resultado desta função é cacheado em memória pelo Streamlit.
     """
     GEOCODED_FILENAME = "zabbix_hosts_geocoded.xlsx"
-    cache_exists = os.path.exists(GEOCODED_FILENAME)
-
-    # Inicia a pipeline de atualização
-    # Passo 1: Busca dados do Zabbix (sempre)
+    
+    # Passo 1: Busca dados do Zabbix (sempre executa para obter status mais recente)
     current_hosts_df = fetch_treat_and_categorize_hosts()
     
     if current_hosts_df is None:
         st.error("Falha ao buscar hosts do Zabbix. Abortando.")
         return None
 
-    # Passo 2: Busca as métricas de desempenho (sempre)
+    # Passo 2: Busca as métricas de desempenho
     all_host_ids = current_hosts_df['hostid'].tolist()
     if all_host_ids:
         metrics_df = metrics_fetcher.get_latest_metrics(all_host_ids)
@@ -71,8 +67,8 @@ def run_update_pipeline(force_zabbix_refresh=True):
             metrics_df['hostid'] = metrics_df['hostid'].astype(str)
             current_hosts_df = pd.merge(current_hosts_df, metrics_df, on='hostid', how='left')
 
-    # Passo 3: Geocodificação com cache (para economia)
-    if cache_exists:
+    # Passo 3: Geocodificação usando o cache do arquivo .xlsx
+    if os.path.exists(GEOCODED_FILENAME):
         cached_df = pd.read_excel(GEOCODED_FILENAME)
         cached_df = cached_df[['hostid', 'latitude', 'longitude', 'google_address']]
         
@@ -80,24 +76,25 @@ def run_update_pipeline(force_zabbix_refresh=True):
         cached_df['hostid'] = cached_df['hostid'].astype(str)
         current_hosts_df = pd.merge(current_hosts_df, cached_df, on='hostid', how='left')
     else:
-        # Se o cache não existe, cria as colunas vazias para a lógica funcionar
+        st.warning(f"Arquivo de cache '{GEOCODED_FILENAME}' não encontrado. A geolocalização não será exibida.")
         current_hosts_df['latitude'] = np.nan
         current_hosts_df['longitude'] = np.nan
         current_hosts_df['google_address'] = None
     
-    # Geocodifica apenas os hosts novos
+    # Geocodifica APENAS os hosts que não estavam no cache (novos hosts)
     needs_geocoding = current_hosts_df[current_hosts_df['latitude'].isna()]
     if not needs_geocoding.empty:
-        st.info(f"Geocodificando {len(needs_geocoding)} hosts novos...")
+        # Esta chamada agora só acontece se um host novo for adicionado ao Zabbix
+        # e não estiver no seu arquivo .xlsx.
         geocoded_subset = geocoder.apply_geocoding(needs_geocoding.copy(), address_column='treated_name')
         current_hosts_df.update(geocoded_subset)
+        
+        # Salva o cache de volta. No Streamlit Cloud, isso é temporário,
+        # mas útil se novos hosts forem adicionados durante a sessão.
+        geocache_df = current_hosts_df[['hostid', 'name', 'latitude', 'longitude', 'google_address']].copy()
+        geocache_df.to_excel(GEOCODED_FILENAME, index=False)
     
     # Passo 4: Análise espacial
     hosts_dataframe = spatial_analyzer.apply_spatial_analysis(current_hosts_df)
     
-    # Passo 5: Salva apenas o cache de geocodificação
-    # Salva apenas as colunas necessárias para geocodificação futura
-    geocache_df = current_hosts_df[['hostid', 'name', 'latitude', 'longitude', 'google_address']].copy()
-    geocache_df.to_excel(GEOCODED_FILENAME, index=False)
-
     return hosts_dataframe

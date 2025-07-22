@@ -18,7 +18,7 @@ ENV/
 .streamlit/secrets.toml
 
 # Arquivos de dados gerados e cache
-*.xlsx
+# *.xlsx
 *.csv
 *.log
 

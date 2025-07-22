@@ -9,28 +9,23 @@ st.title("Dashboard de Análise de Hosts do Zabbix")
 
 # --- Sidebar para Controles ---
 st.sidebar.header("Controles")
-update_data = st.sidebar.button(
-    "Atualizar Dados Agora", 
-    help="Busca os dados mais recentes do Zabbix."
-)
+if st.sidebar.button("Limpar Cache e Atualizar Dados"):
+    # Limpa o cache da função para forçar a re-execução
+    run_update_pipeline.clear()
+    st.success("Cache limpo. Os dados serão atualizados.")
+    # Opcional: recarrega a página para refletir a mudança imediatamente
+    st.rerun()
 
-# --- Carregamento Inicial ou Atualização Manual ---
-if 'last_update' not in st.session_state or update_data:
-    with st.spinner("Buscando dados atualizados do Zabbix..."):
-        start_time = time.time()
-        st.session_state.data = run_update_pipeline(force_zabbix_refresh=True)
-        st.session_state.last_update = time.time()
-        st.session_state.last_update_formatted = time.strftime('%H:%M:%S')
-        load_time = st.session_state.last_update - start_time
-        st.success(f"Dados atualizados em {load_time:.2f} segundos")
-
-df = st.session_state.data
+# --- Carregamento dos Dados ---
+# A função agora é cacheada. O spinner é gerenciado pelo decorador @st.cache_data.
+df = run_update_pipeline()
 
 # Timestamp da última atualização
-if 'last_update_formatted' in st.session_state:
-    st.sidebar.info(f"Última atualização: {st.session_state.last_update_formatted}")
-else:
-    st.sidebar.info("Aguardando primeira atualização...")
+if 'last_update' not in st.session_state:
+    st.session_state.last_update = time.time()
+
+st.sidebar.info(f"Dados carregados em: {time.strftime('%H:%M:%S', time.localtime(st.session_state.last_update))}")
+
 
 if df is not None and not df.empty:
     # NOVO: Cards de estatísticas
